@@ -322,7 +322,85 @@ def ui_analytics():
     st.bar_chart(dfYearData.set_index('Month')['Total Spend'])
 
 
+import lmstudio as lms
+def local_ai_helper():
+    st.header("AI Helper")
+    if "messages" not in st.session_state:
+        st.session_state.messages = []  # list of dicts: {"role": "user"|"assistant", "content": str}
+    model = lms.llm("qwen3-0.6b")
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
+
+    prompt = st.chat_input("Type your message")
+    if prompt:
+        st.session_state.messages.append({"role":"user","content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        # st.spinner("Thinking...")
+        result = model.respond(prompt)
+        with st.chat_message("ai"):
+            st.session_state.messages.append({"role": "assistant", "content": result})
+            # st.session_state.messages.append({"role":"AI","content": prompt})
+            st.markdown(result)
+
+
+
+import requests
+
 def ui_ai_helper():
+    st.header("AI Helper")
+
+    model_id = "qwen3-0.6b"
+    temperature = 0.7
+    max_tokens = -1
+    stream = False
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = []  # list of dicts: {"role": "user"|"assistant", "content": str}
+    with st.sidebar:
+        st.subheader("Settings")
+        model_id = st.selectbox("Model", ["qwen3-0.6b"], index=0)
+        temperature = st.slider("Temperature", min_value=0.0, max_value=1.0, value=temperature, step=0.1)
+        max_tokens = st.slider("Max tokens", min_value=0, max_value=1000, value=max_tokens, step=50 )
+        stream = st.checkbox("Stream", value=stream)
+        if st.button("Clear chat"):
+            st.session_state.messages = []
+            st.rerun()
+
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
+
+    prompt = st.chat_input("Type your message")
+    if prompt:
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            try:
+                url = "http://localhost:1234/v1/chat/completions"
+                headers = {"Content-Type": "application/json"}
+                data = {
+                    "model": model_id,
+                    "messages": st.session_state.messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "stream": stream
+                }
+                resp = requests.post(url, headers=headers, json=data)
+                if resp.status_code == 200:
+                    reply = resp.json()["choices"][0]["message"]["content"]
+                else:
+                    raise Exception(f"API error: {resp.text}")
+                st.markdown(reply)
+                st.session_state.messages.append({"role": "assistant", "content": reply})
+            except Exception as e:
+                st.error(f"API error: {e}")
+
+
+def ui_ai_helper_original():
     from google import genai
     st.header("AI Helper")
     # st.write("Ask something about your expenses.")
@@ -347,7 +425,7 @@ def ui_ai_helper():
     if "messages" not in st.session_state:
         st.session_state.messages = []  # list of dicts: {"role": "user"|"assistant", "content": str}
 
-    print('HELLLo hehe****************')
+    # print('HELLLo hehe****************')
     # Sidebar: simple settings
     with st.sidebar:
         st.subheader("Settings")
@@ -400,11 +478,6 @@ def ui_ai_helper():
     #     response_placeholder.write(response.text)
 
 
-
-# ---------------------------
-# MAIN APP
-# ---------------------------
-
 def main():
     st.sidebar.title("Navigation")
     menu = st.sidebar.radio(
@@ -421,7 +494,8 @@ def main():
     elif menu == "Analytics":
         ui_analytics()
     elif menu == "AI Helper":
-        ui_ai_helper()
+        # ui_ai_helper()
+        local_ai_helper()
 
 
 if __name__ == "__main__":
